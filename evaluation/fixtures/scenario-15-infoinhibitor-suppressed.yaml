@@ -1,0 +1,24 @@
+scenario_id: scenario-15-infoinhibitor-suppressed
+description: >
+  InfoInhibitor is Alertmanager's own meta-alert indicating some info-level
+  alerts are being inhibited; it is noise from the agent's perspective and
+  should be suppressed identically to Watchdog.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-infoinhibitor-0001
+  alert_name: InfoInhibitor
+  severity_hint: none
+  service: alerting-pipeline
+  namespace: monitoring
+  cluster: prod-us-east-1
+  labels:
+    team: observability
+  annotations:
+    summary: "info-level alerts are being inhibited for one or more namespaces"
+expected_severity: null
+expected_action_type: null
+expected_requires_approval: false
+expect_diagnostic_run: false
+notes: >
+  Second noisy-alert-name fixture (distinct from Watchdog in scenario-03) to
+  cover both entries in triage.py's _NOISY_ALERT_NAMES set.

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: sre-incident-agent
+description: Multi-agent SRE incident-response system (FastAPI + LangGraph) — Helm chart for the API/worker Deployment, its ServiceAccount (IRSA), NetworkPolicy, HPA, and Prometheus scrape wiring.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - sre
+  - incident-response
+  - langgraph
+  - fastapi
+home: https://github.com/ramcreddy-ch/agentic-ai-projects
+maintainers:
+  - name: ramcreddy-ch
+    email: ramcreddy17@gmail.com

@@ -1,0 +1,24 @@
+scenario_id: scenario-08-cache-hit-rate-drop-flush
+description: >
+  catalog-svc's cache hit rate collapsed after a bad cache key rollout;
+  flushing the cache is the low-risk, idempotent fix while the underlying
+  key-schema bug gets a real code fix later.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-cache-0001
+  alert_name: CacheHitRateDrop
+  severity_hint: warning
+  service: catalog
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: catalog
+  annotations:
+    summary: "catalog-svc cache hit rate dropped from 94% to 11% after key-schema change"
+expected_severity: sev3
+expected_action_type: flush_cache
+expected_requires_approval: false
+expect_diagnostic_run: true
+notes: >
+  flush_cache has auto_execute_if_low_risk: true and no intrinsic-risk
+  override, so a plain low-risk classification auto-executes it.

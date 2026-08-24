@@ -1,0 +1,26 @@
+scenario_id: scenario-03-noisy-watchdog
+description: >
+  Prometheus Watchdog is a known always-firing liveness alert for the
+  alerting pipeline itself; it should be suppressed by the Triage Agent's
+  noisy-alert heuristic before any LLM call, and never reach diagnostic.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-watchdog-0001
+  alert_name: Watchdog
+  severity_hint: none
+  service: alerting-pipeline
+  namespace: monitoring
+  cluster: prod-us-east-1
+  labels:
+    team: observability
+  annotations:
+    summary: "this is a health check alert, always firing"
+expected_severity: null
+expected_action_type: null
+expected_requires_approval: false
+expect_diagnostic_run: false
+notes: >
+  Severity is never assigned on the suppressed-noise path (the incident
+  keeps whatever placeholder severity the caller constructed it with), so
+  the harness intentionally does not score the triage dimension here
+  (expected_severity: null).

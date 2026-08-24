@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sre-incident-agent.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sre-incident-agent.labels" . | nindent 4 }}
+data:
+  # Non-secret configuration only. Secret-bearing values (POSTGRES_DSN,
+  # ANTHROPIC_API_KEY, OPENAI_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN,
+  # PAGERDUTY_API_TOKEN, PAGERDUTY_ROUTING_KEY, API_JWT_SECRET) live in the
+  # Secret referenced by sre-incident-agent.secretName, populated
+  # out-of-band from infrastructure/terraform/modules/secrets.
+  LLM_PROVIDER: {{ .Values.config.llmProvider | quote }}
+  LLM_MODEL_FAST: {{ .Values.config.llmModelFast | quote }}
+  LLM_MODEL_STRONG: {{ .Values.config.llmModelStrong | quote }}
+  INCIDENT_TOKEN_BUDGET: {{ .Values.config.incidentTokenBudget | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  OTEL_SERVICE_NAME: {{ .Values.config.otelServiceName | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
+  PROMETHEUS_METRICS_PORT: {{ .Values.config.prometheusMetricsPort | quote }}
+  PROMETHEUS_BASE_URL: {{ .Values.config.prometheusBaseUrl | quote }}
+  LOKI_BASE_URL: {{ .Values.config.lokiBaseUrl | quote }}
+  AWS_REGION: {{ .Values.config.awsRegion | quote }}
+  AWS_SECRETS_MANAGER_PREFIX: {{ .Values.config.awsSecretsManagerPrefix | quote }}
+  API_JWT_AUDIENCE: {{ .Values.config.apiJwtAudience | quote }}
+  APPROVAL_QUEUE_STALE_MINUTES: {{ .Values.config.approvalQueueStaleMinutes | quote }}
+  ALLOWLIST_CONFIG_PATH: {{ .Values.config.allowlistConfigPath | quote }}
+  POSTGRES_POOL_MIN: {{ .Values.config.postgresPoolMin | quote }}
+  POSTGRES_POOL_MAX: {{ .Values.config.postgresPoolMax | quote }}

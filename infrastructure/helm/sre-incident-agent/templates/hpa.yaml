@@ -1,0 +1,44 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "sre-incident-agent.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sre-incident-agent.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "sre-incident-agent.fullname" . }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    # Primary, always-real autoscaling signal: CPU utilization.
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if .Values.autoscaling.customMetrics.enabled }}
+    # Secondary signal on the agent's own approval-queue depth
+    # (sre_agent_approval_queue_depth, exposed on /metrics). This requires
+    # the Prometheus Adapter (https://github.com/kubernetes-sigs/prometheus-adapter)
+    # to be installed cluster-wide and configured to expose that Prometheus
+    # series as a Kubernetes "External" metric named
+    # sre_agent_approval_queue_depth — without the adapter this metric
+    # block is inert and the HPA falls back to CPU only. Kept
+    # optional/off by default for that reason.
+    - type: External
+      external:
+        metric:
+          name: sre_agent_approval_queue_depth
+          selector:
+            matchLabels:
+              namespace: {{ .Release.Namespace }}
+        target:
+          type: AverageValue
+          averageValue: {{ .Values.autoscaling.customMetrics.approvalQueueDepthTarget | quote }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,48 @@
+# Production environment overrides layered on top of
+# infrastructure/helm/sre-incident-agent/values.yaml by the ArgoCD
+# Application in ../application.yaml (spec.source.helm.valueFiles).
+#
+# image.tag here is the "last known good" fallback; day-to-day the tag is
+# updated by CI/CD (a commit to this file) or by Argo CD Image Updater,
+# which is what actually drives the sync described in application.yaml's
+# top-of-file comment.
+
+image:
+  tag: "0.1.0"
+
+replicaCount: 3
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 12
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 768Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/sre-incident-agent-prod-irsa"
+
+config:
+  logLevel: "INFO"
+  awsSecretsManagerPrefix: "sre-incident-agent/prod"
+  prometheusBaseUrl: "http://prometheus.monitoring.svc.cluster.local:9090"
+  lokiBaseUrl: "http://loki.monitoring.svc.cluster.local:3100"
+
+postgres:
+  host: "sre-incident-agent-prod.xxxxxxxxxxxx.us-east-1.rds.amazonaws.com"
+  port: 5432
+  database: "sre_incident_agent"
+
+networkPolicy:
+  enabled: true
+
+serviceMonitor:
+  enabled: true

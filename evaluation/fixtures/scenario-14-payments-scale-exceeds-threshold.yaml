@@ -1,0 +1,28 @@
+scenario_id: scenario-14-payments-scale-exceeds-threshold
+description: >
+  payments-svc needs a large, sudden scale-up during a flash-sale traffic
+  spike; the requested delta exceeds max_auto_scale_delta, so even though
+  scale_replicas is normally auto-executable, this one requires approval.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-scale-threshold-0001
+  alert_name: DBQueryLatencyHigh
+  severity_hint: warning
+  service: payments
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: payments
+  annotations:
+    summary: "payments-svc queue depth climbing, p99 query latency at 1.8s during flash-sale traffic"
+expected_severity: sev2
+expected_action_type: scale_replicas
+expected_requires_approval: true
+expect_diagnostic_run: true
+action_parameters:
+  replicas: 12
+  replica_delta: 5
+notes: >
+  replica_delta (5) exceeds max_auto_scale_delta (2) from allowlist.yaml,
+  bumping risk_level from low to medium and forcing approval -- contrast
+  with scenario-09's delta of 2, which stays under the threshold.

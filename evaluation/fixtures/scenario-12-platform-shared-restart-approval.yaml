@@ -1,0 +1,26 @@
+scenario_id: scenario-12-platform-shared-restart-approval
+description: >
+  A shared-auth pod (multi-tenant platform namespace) is crash-looping.
+  restart_pod is normally low-risk and auto-executed, but platform-shared is
+  in always_require_approval_namespaces, so even this gets queued for a
+  human.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-platform-0001
+  alert_name: PodCrashLoopBackOff
+  severity_hint: warning
+  service: shared-auth
+  namespace: platform-shared
+  cluster: prod-us-east-1
+  labels:
+    team: platform
+  annotations:
+    summary: "shared-auth-9f1a-ghi78 crash looping in the shared platform tenant namespace"
+expected_severity: sev2
+expected_action_type: restart_pod
+expected_requires_approval: true
+expect_diagnostic_run: true
+notes: >
+  Exercises AllowlistPolicy.always_require_approval_namespaces -- blast
+  radius in a shared tenant namespace is hard to bound even for an
+  otherwise-safe action type.

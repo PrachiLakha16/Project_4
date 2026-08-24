@@ -1,0 +1,48 @@
+sre-incident-agent {{ .Chart.AppVersion }} has been deployed to namespace "{{ .Release.Namespace }}".
+
+1. Check rollout status:
+
+   kubectl rollout status deployment/{{ include "sre-incident-agent.fullname" . }} -n {{ .Release.Namespace }}
+
+2. Confirm the ServiceAccount's IRSA annotation resolves to a valid IAM role
+   (secretsmanager:GetSecretValue/DescribeSecret on
+   arn:aws:secretsmanager:*:*:secret:{{ .Values.config.awsSecretsManagerPrefix }}/* only):
+
+   kubectl get sa {{ include "sre-incident-agent.serviceAccountName" . }} -n {{ .Release.Namespace }} -o yaml
+
+3. Confirm the Secret referenced by envFrom exists and was populated by
+   External Secrets Operator / the AWS Secrets Manager CSI driver from
+   infrastructure/terraform/modules/secrets (this chart does not create it):
+
+   kubectl get secret {{ include "sre-incident-agent.secretName" . }} -n {{ .Release.Namespace }}
+
+4. Port-forward the service to hit the health/readiness/metrics endpoints
+   directly:
+
+   kubectl port-forward svc/{{ include "sre-incident-agent.fullname" . }} 8000:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+   curl http://127.0.0.1:8000/healthz
+   curl http://127.0.0.1:8000/readyz
+   curl http://127.0.0.1:8000/metrics
+
+{{- if .Values.networkPolicy.enabled }}
+
+5. A NetworkPolicy is enforcing deny-all-by-default egress except
+   Prometheus, Loki, Postgres, and HTTPS (K8s API / Slack / PagerDuty /
+   Anthropic / OpenAI / AWS Secrets Manager). If the pod can't reach a
+   dependency, check infrastructure/helm/sre-incident-agent/templates/networkpolicy.yaml
+   and values.yaml `networkPolicy` before widening any other access control.
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+6. Ingress is enabled at:
+{{- range .Values.ingress.hosts }}
+   http://{{ .host }}
+{{- end }}
+{{- else }}
+
+6. Ingress is disabled. The API is reachable in-cluster only
+   ({{ include "sre-incident-agent.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }})
+   — typically fronted by the Alertmanager/PagerDuty webhook relay and an
+   internal-only load balancer, not exposed publicly.
+{{- end }}

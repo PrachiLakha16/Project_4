@@ -1,0 +1,76 @@
+# GitOps flow for sre-incident-agent:
+#
+#   1. CI builds and pushes a new image on merge to main, tags it
+#      (e.g. <git-sha> or a semver tag), and pushes to the image registry.
+#   2. CD updates the deployed image tag one of two ways:
+#        a) a CD job commits the new tag into
+#           infrastructure/argocd/values/prod.yaml (image.tag), and/or the
+#           helm.parameters override below, opening a PR or pushing
+#           directly per the branch's protection rules, OR
+#        b) Argo CD Image Updater is configured (separately, via the
+#           argocd-image-updater.argoproj.io/image-list annotation on this
+#           Application) to detect new tags in the registry itself and
+#           write them back to Git without a CI job doing it explicitly.
+#   3. ArgoCD's controller detects the Git commit (drift between desired
+#      state in Git and the live cluster state) and, because
+#      syncPolicy.automated is enabled below, syncs automatically —
+#      prune: true removes resources deleted from the chart, selfHeal: true
+#      reverts any manual kubectl drift back to what's in Git.
+#
+# This file is the "prod" instance of the Application; copy/parameterize
+# per environment (see helm.parameters below for the per-env override
+# pattern) for staging/dev.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sre-incident-agent-prod
+  namespace: argocd
+  finalizers:
+    # Ensures ArgoCD cleans up cluster resources on Application deletion
+    # rather than orphaning them.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: sre-incident-agent
+
+  source:
+    # sre-incident-agent is a standalone repo (one of a 10-repo portfolio
+    # series living under a shared parent directory locally, but each is its
+    # own git remote) -- the Helm chart lives at this repo's own root path.
+    repoURL: https://github.com/ramcreddy-ch/sre-incident-agent.git
+    targetRevision: main
+    path: infrastructure/helm/sre-incident-agent
+    helm:
+      valueFiles:
+        - values.yaml
+        - ../../argocd/values/prod.yaml
+      parameters:
+        - name: image.tag
+          # Overridden per-deploy by CI/CD or Argo Image Updater; this is
+          # the fallback if neither has run yet for a fresh environment.
+          value: "0.1.0"
+        - name: replicaCount
+          value: "3"
+        - name: config.logLevel
+          value: "INFO"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sre-incident-agent
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+
+  revisionHistoryLimit: 10

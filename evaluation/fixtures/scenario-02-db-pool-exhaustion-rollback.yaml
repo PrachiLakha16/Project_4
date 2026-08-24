@@ -1,0 +1,28 @@
+scenario_id: scenario-02-db-pool-exhaustion-rollback
+description: >
+  payments-svc connection pool to the payments database is exhausted
+  minutes after a deploy landed; the correct call is a rollback, not a
+  restart, since a restart alone won't undo a bad connection-pool config
+  change.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-dbpool-0001
+  alert_name: DatabaseConnectionPoolExhausted
+  severity_hint: critical
+  service: payments
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: payments
+    deployment: payments-svc
+  annotations:
+    summary: "payments-svc connection pool exhausted talking to payments-db"
+    description: "pool exhaustion began 3 minutes after payments-svc v482 rollout completed"
+expected_severity: sev1
+expected_action_type: rollback_deployment
+expected_requires_approval: true
+expect_diagnostic_run: true
+notes: >
+  rollback_deployment has auto_execute_if_low_risk: false in allowlist.yaml,
+  so it always lands in the human-approval queue regardless of computed risk
+  level.

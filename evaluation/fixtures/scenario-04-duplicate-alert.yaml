@@ -1,0 +1,28 @@
+scenario_id: scenario-04-duplicate-alert
+description: >
+  A re-fire of an alert whose fingerprint the Triage Agent has already seen
+  for a different, still-open incident -- should be deduplicated and routed
+  straight to communications rather than re-running the whole pipeline.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-duplicate-0001
+  alert_name: PodCrashLoopBackOff
+  severity_hint: warning
+  service: checkout
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: checkout
+  annotations:
+    summary: "checkout pod crash looping (duplicate re-fire)"
+expected_severity: null
+expected_action_type: null
+expected_requires_approval: false
+expect_diagnostic_run: false
+simulate_duplicate: true
+notes: >
+  simulate_duplicate tells run_eval.py to pre-seed
+  deps.seen_fingerprints[fingerprint] with a prior incident id before
+  invoking the graph, exercising the exact dedup path in triage_node.
+  Severity is not scored for the same reason as the suppressed-noise
+  scenario: the dedup path never assigns one.

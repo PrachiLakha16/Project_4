@@ -1,0 +1,28 @@
+scenario_id: scenario-09-scale-up-auto
+description: >
+  checkout-svc is CPU-saturated under a modest, legitimate traffic increase;
+  a small scale-up (delta within the auto-execute threshold) resolves it
+  without a human in the loop.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-scaleup-0001
+  alert_name: HighCPUSaturation
+  severity_hint: warning
+  service: checkout
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: checkout
+  annotations:
+    summary: "checkout-svc CPU at 92% across all replicas for 10 minutes"
+expected_severity: sev2
+expected_action_type: scale_replicas
+expected_requires_approval: false
+expect_diagnostic_run: true
+action_parameters:
+  replicas: 5
+  replica_delta: 2
+notes: >
+  replica_delta (2) is at the max_auto_scale_delta threshold (2) from
+  allowlist.yaml, so this stays low-risk and auto-executes. Contrast with
+  scenario-14, where the delta exceeds the threshold.

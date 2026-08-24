@@ -1,0 +1,58 @@
+# ArgoCD AppProject scoping the sre-incident-agent Application to its own
+# namespace, source repo, and destination cluster. Keeps this workload from
+# being able to sync arbitrary manifests into arbitrary namespaces even if
+# the Application spec were compromised or misconfigured.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: sre-incident-agent
+  namespace: argocd
+spec:
+  description: SRE Incident Agent — multi-agent incident-response FastAPI service
+
+  sourceRepos:
+    - https://github.com/ramcreddy-ch/sre-incident-agent.git
+
+  destinations:
+    - namespace: sre-incident-agent
+      server: https://kubernetes.default.svc
+    - namespace: sre-incident-agent-staging
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist: []
+
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+
+  roles:
+    - name: readonly
+      description: Read-only access for the on-call team
+      policies:
+        - p, proj:sre-incident-agent:readonly, applications, get, sre-incident-agent/*, allow
+      groups:
+        - sre-incident-agent-oncall
+
+    - name: deployer
+      description: CD pipeline role — allowed to sync, not to modify project scoping
+      policies:
+        - p, proj:sre-incident-agent:deployer, applications, get, sre-incident-agent/*, allow
+        - p, proj:sre-incident-agent:deployer, applications, sync, sre-incident-agent/*, allow
+      groups:
+        - sre-incident-agent-ci

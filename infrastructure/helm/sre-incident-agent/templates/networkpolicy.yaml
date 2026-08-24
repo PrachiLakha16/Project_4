@@ -1,0 +1,87 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sre-incident-agent.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sre-incident-agent.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sre-incident-agent.selectorLabels" . | nindent 6 }}
+  # Deny-all default: only pod/protocol/port combinations listed below are
+  # permitted, both directions. Per SECURITY.md this restricts egress to
+  # Prometheus, Loki, the K8s API server, Postgres, and the Slack/PagerDuty
+  # (and Anthropic/OpenAI/AWS Secrets Manager) API endpoints only.
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Traffic to the API port (webhooks from the ingress controller /
+    # internal ALB, and the in-cluster Prometheus scrape).
+    - from:
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.ingress.fromNamespaceSelector | nindent 12 }}
+          {{- with .Values.networkPolicy.ingress.fromPodSelector }}
+          podSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    - from:
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.ingress.monitoringNamespaceSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+  egress:
+    # DNS resolution (kube-dns/CoreDNS in kube-system) — required for every
+    # other egress rule below to be able to resolve names.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Prometheus (metrics queries the Diagnostic Agent runs against
+    # PROMETHEUS_BASE_URL).
+    - to:
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.egress.prometheusNamespaceSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.prometheusPort }}
+    # Loki (log queries the Diagnostic Agent runs against LOKI_BASE_URL).
+    - to:
+        - namespaceSelector:
+            {{- toYaml .Values.networkPolicy.egress.prometheusNamespaceSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.lokiPort }}
+    # Postgres (LangGraph checkpointer + pgvector runbook_chunks).
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.egress.kubernetesApiCidr }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.postgresPort }}
+    # HTTPS egress: K8s API server (Remediation Agent's kubectl-equivalent
+    # calls), Slack, PagerDuty, Anthropic, OpenAI, and AWS Secrets
+    # Manager/STS (IRSA token exchange) all speak HTTPS on 443. A dedicated
+    # ipBlock per external SaaS endpoint is intentionally not hardcoded
+    # here since their IP ranges rotate; restrict further with an egress
+    # firewall (e.g. AWS Network Firewall / a service mesh's
+    # ServiceEntry-equivalent) at the platform layer if stricter allow-
+    # listing by FQDN is required.
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.egress.kubernetesApiCidr }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.httpsPort }}
+{{- end }}

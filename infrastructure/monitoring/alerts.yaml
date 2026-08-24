@@ -1,0 +1,96 @@
+# PrometheusRule CRD (prometheus-operator) — alerts on the sre-incident-agent
+# service itself (its own health/SLOs), not on the infrastructure incidents
+# it responds to. Deploy alongside the ServiceMonitor
+# (infrastructure/helm/sre-incident-agent/templates/servicemonitor.yaml,
+# serviceMonitor.enabled=true) so the in-cluster Prometheus Operator picks
+# both up via label selectors.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sre-incident-agent-rules
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: sre-incident-agent
+    app.kubernetes.io/component: alerting
+    # Match whatever label the cluster's Prometheus Operator ruleSelector
+    # expects, e.g. release: kube-prometheus-stack.
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: sre-incident-agent.rules
+      rules:
+        - alert: SREAgentApprovalQueueStale
+          expr: sre_agent_approval_queue_depth > 0
+          for: 15m
+          labels:
+            severity: warning
+            service: sre-incident-agent
+          annotations:
+            summary: "sre-incident-agent approval queue has been non-empty for 15m+"
+            description: >-
+              At least one remediation action has been pending human approval
+              for over 15 minutes (current depth: {{ $value }}). This matches
+              APPROVAL_QUEUE_STALE_MINUTES=15 in the app config — on-call
+              should review GET /approvals and action or reject the pending
+              item(s).
+            runbook_url: "https://github.com/ramcreddy-ch/agentic-ai-projects/blob/main/sre-incident-agent/docs/runbooks/approval-queue-stale.md"
+
+        - alert: SREAgentHighTriageLatency
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum by (le) (rate(sre_agent_time_to_triage_seconds_bucket[10m]))
+            ) > 60
+          for: 10m
+          labels:
+            severity: warning
+            service: sre-incident-agent
+          annotations:
+            summary: "sre-incident-agent p95 time-to-triage exceeds SLO"
+            description: >-
+              p95 wall-clock time from alert ingestion to triage completion
+              has been above the 60s SLO for 10 minutes (current: {{ $value
+              | humanizeDuration }}). Check sre_agent_node_latency_seconds by
+              node for the slow stage, and sre_agent_circuit_breaker_open for
+              a degraded upstream dependency (Prometheus/Loki/LLM provider).
+            runbook_url: "https://github.com/ramcreddy-ch/agentic-ai-projects/blob/main/sre-incident-agent/docs/runbooks/high-triage-latency.md"
+
+        - alert: SREAgentCircuitBreakerOpen
+          expr: sre_agent_circuit_breaker_open == 1
+          for: 5m
+          labels:
+            severity: critical
+            service: sre-incident-agent
+          annotations:
+            summary: "sre-incident-agent circuit breaker open for {{ $labels.dependency }}"
+            description: >-
+              The circuit breaker for dependency "{{ $labels.dependency }}"
+              has been open for 5+ minutes, meaning calls to it are being
+              short-circuited rather than attempted. Diagnostic/Remediation
+              capabilities that depend on it are degraded. Check that
+              dependency's own health directly (Prometheus, Loki, the K8s
+              API, or the configured LLM provider).
+            runbook_url: "https://github.com/ramcreddy-ch/agentic-ai-projects/blob/main/sre-incident-agent/docs/runbooks/circuit-breaker-open.md"
+
+        - alert: SREAgentActionFailureRateHigh
+          expr: |
+            sum(rate(sre_agent_action_result_total{result="failure"}[15m]))
+            /
+            clamp_min(sum(rate(sre_agent_action_result_total[15m])), 1e-9)
+            > 0.2
+          for: 15m
+          labels:
+            severity: critical
+            service: sre-incident-agent
+          annotations:
+            summary: "sre-incident-agent remediation action failure rate above 20%"
+            description: >-
+              Over the last 15 minutes, more than 20% of remediation actions
+              executed by the agent have failed (current failure ratio:
+              {{ $value | humanizePercentage }}). This can indicate a broken
+              allowlisted action, an RBAC/permissions regression on the
+              agent's ServiceAccount, or a downstream cluster problem the
+              agent cannot actually remediate. Investigate via
+              sre_agent_action_result_total{result="failure"} broken down by
+              action_type before approving further actions of the same type.
+            runbook_url: "https://github.com/ramcreddy-ch/agentic-ai-projects/blob/main/sre-incident-agent/docs/runbooks/action-failure-rate-high.md"

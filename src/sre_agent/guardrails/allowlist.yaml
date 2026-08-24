@@ -1,0 +1,46 @@
+# Action allowlist/denylist consulted by guardrails/risk.py.
+#
+# `auto_execute: true` actions still pass through risk classification (blast
+# radius, namespace criticality) before executing -- this file sets the
+# *ceiling* of what's ever permitted, not a bypass of judgment.
+
+allowed_action_types:
+  - restart_pod
+  - rollback_deployment
+  - scale_replicas
+  - flush_cache
+  - trigger_failover
+
+denied_action_types: []
+
+# Namespaces the Remediation Agent may never touch, regardless of computed risk.
+namespace_denylist:
+  - kube-system
+  - cert-manager
+  - external-secrets
+  - argocd
+
+# Namespaces where even "low risk" actions still require human approval
+# (e.g. shared platform tenants where blast radius is hard to bound).
+always_require_approval_namespaces:
+  - platform-shared
+
+# Per-action-type policy: auto_execute only applies when risk_level == low
+# AND the target namespace is not in always_require_approval_namespaces.
+action_policy:
+  restart_pod:
+    max_auto_replicas_affected: 1
+    auto_execute_if_low_risk: true
+  scale_replicas:
+    max_auto_scale_delta: 2
+    auto_execute_if_low_risk: true
+  flush_cache:
+    auto_execute_if_low_risk: true
+  rollback_deployment:
+    auto_execute_if_low_risk: false  # always requires approval
+  trigger_failover:
+    auto_execute_if_low_risk: false  # always requires approval
+
+# Idempotency-key TTL: a retried action with the same key inside this window
+# reuses the prior result instead of re-executing.
+idempotency_ttl_seconds: 3600

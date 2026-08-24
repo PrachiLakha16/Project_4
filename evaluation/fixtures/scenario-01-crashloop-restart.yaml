@@ -1,0 +1,27 @@
+scenario_id: scenario-01-crashloop-restart
+description: >
+  A single checkout pod is stuck in CrashLoopBackOff after an OOMKill; the
+  fleet is otherwise healthy, so this is the textbook case for a low-risk,
+  auto-executed pod restart.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-crashloop-0001
+  alert_name: PodCrashLoopBackOff
+  severity_hint: warning
+  service: checkout
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: checkout
+    pod: checkout-7d9f-abc12
+  annotations:
+    summary: "checkout-7d9f-abc12 is in CrashLoopBackOff (14 restarts in 10m)"
+    description: "container OOMKilled repeatedly; memory limit likely too low for current load"
+expected_severity: sev2
+expected_action_type: restart_pod
+expected_requires_approval: false
+expect_diagnostic_run: true
+notes: >
+  Single pod, single namespace, restart_pod is allowlisted with
+  auto_execute_if_low_risk: true and max_auto_replicas_affected: 1 -- this
+  should auto-execute without a human in the loop.

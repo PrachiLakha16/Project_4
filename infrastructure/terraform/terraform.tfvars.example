@@ -1,0 +1,39 @@
+# Example non-secret values for the sre-incident-agent Terraform stack.
+# Copy to terraform.tfvars (git-ignored) and fill in real values for your
+# environment. Never put the sensitive variables (slack_webhook_url,
+# pagerduty_api_token, anthropic_api_key, etc.) in this file or in
+# terraform.tfvars committed to git — pass those via TF_VAR_* environment
+# variables sourced from a secrets manager in CI, e.g.:
+#
+#   export TF_VAR_anthropic_api_key="$(aws secretsmanager get-secret-value ...)"
+
+environment = "prod"
+aws_region  = "us-east-1"
+
+cluster_name = "platform-prod-use1"
+
+vpc_id     = "vpc-0123456789abcdef0"
+subnet_ids = [
+  "subnet-0aaa111122223333a",
+  "subnet-0bbb444455556666b",
+]
+
+eks_node_security_group_id = "sg-0123456789abcdef0"
+
+k8s_namespace            = "sre-incident-agent"
+k8s_service_account_name = "sre-incident-agent"
+
+db_instance_class       = "db.t3.medium"
+db_engine_version       = "16.4"
+db_allocated_storage_gb = 50
+db_multi_az             = true
+db_name                 = "sre_incident_agent"
+db_master_username      = "sre_agent_admin"
+
+secrets_manager_prefix = "sre-incident-agent/prod"
+
+tags = {
+  Project     = "sre-incident-agent"
+  Environment = "prod"
+  ManagedBy   = "terraform"
+}

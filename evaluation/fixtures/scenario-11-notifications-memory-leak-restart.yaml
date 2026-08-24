@@ -1,0 +1,25 @@
+scenario_id: scenario-11-notifications-memory-leak-restart
+description: >
+  notifications-svc has a slow memory leak that eventually OOMKills the
+  pod; a restart buys time until the leak itself is patched.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-memleak-0001
+  alert_name: PodMemoryLeak
+  severity_hint: warning
+  service: notifications
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: notifications
+    pod: notifications-6b2c-def45
+  annotations:
+    summary: "notifications-6b2c-def45 OOMKilled, memory usage climbed steadily over 6 hours before the kill"
+expected_severity: sev3
+expected_action_type: restart_pod
+expected_requires_approval: false
+expect_diagnostic_run: true
+notes: >
+  Single pod, single namespace -- same shape as scenario-01 but a different
+  service/root-cause narrative, to cover restart_pod being selected from a
+  slow-leak RCA rather than an acute crash loop.

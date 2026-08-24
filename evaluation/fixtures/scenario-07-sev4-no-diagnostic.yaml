@@ -1,0 +1,26 @@
+scenario_id: scenario-07-sev4-no-diagnostic
+description: >
+  A cosmetic, low-impact latency blip that the triage model correctly rates
+  sev4 -- the graph should stop after triage and never hand off to
+  diagnostic/remediation for something this low-priority.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-sev4-0001
+  alert_name: MinorLatencyBlip
+  severity_hint: info
+  service: search
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: search
+  annotations:
+    summary: "search-svc p99 latency briefly touched 250ms, back to baseline within 30s"
+expected_severity: sev4
+expected_action_type: null
+expected_requires_approval: false
+expect_diagnostic_run: false
+notes: >
+  Unlike the suppressed/duplicate scenarios, triage_node DOES call the LLM
+  here and DOES assign incident.severity -- it's the *routing* decision
+  after that (sev4 is excluded from the (sev1,sev2,sev3) diagnostic set)
+  that short-circuits to communications.

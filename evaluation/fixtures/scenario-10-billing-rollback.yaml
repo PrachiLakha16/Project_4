@@ -1,0 +1,26 @@
+scenario_id: scenario-10-billing-rollback
+description: >
+  billing-svc error rate spiked immediately after a deploy; RCA points at
+  the new release, so the correct action is a rollback -- always
+  human-approved regardless of confidence.
+alert:
+  source: alertmanager
+  fingerprint: fp-eval-billing-0001
+  alert_name: ErrorRateSpike
+  severity_hint: critical
+  service: billing
+  namespace: prod
+  cluster: prod-us-east-1
+  labels:
+    team: billing
+    deployment: billing-svc
+  annotations:
+    summary: "billing-svc 5xx rate jumped from 0.1% to 18% within 2 minutes of v217 rollout"
+expected_severity: sev2
+expected_action_type: rollback_deployment
+expected_requires_approval: true
+expect_diagnostic_run: true
+notes: >
+  Second rollback scenario (distinct service/severity from scenario-02) to
+  reinforce that rollback_deployment always requires approval regardless of
+  severity.

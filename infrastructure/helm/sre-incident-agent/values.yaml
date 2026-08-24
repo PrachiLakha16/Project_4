@@ -1,0 +1,164 @@
+# Default values for sre-incident-agent.
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/ramcreddy-ch/sre-incident-agent
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8000
+
+serviceAccount:
+  create: true
+  name: sre-incident-agent
+  annotations:
+    # Replace with the ARN output by infrastructure/terraform module "iam"
+    # (module.iam.role_arn) for the target environment.
+    eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/sre-incident-agent-prod-irsa"
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+# Extra empty-dir volumes mounted for writable paths, since
+# securityContext.readOnlyRootFilesystem is true.
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  # Custom metric autoscaling on the agent's own approval-queue depth,
+  # requires the Prometheus Adapter to expose sre_agent_approval_queue_depth
+  # as a Kubernetes external metric. Off by default — CPU-based autoscaling
+  # above is the primary, always-real mechanism. See templates/hpa.yaml.
+  customMetrics:
+    enabled: false
+    approvalQueueDepthTarget: 5
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# --- Ingress (optional; disabled by default, the API is typically only
+# reached in-cluster by the Alertmanager/PagerDuty webhook relay and by
+# on-call engineers via a port-forward or an internal-only ALB) ---
+ingress:
+  enabled: false
+  className: alb
+  annotations: {}
+  hosts:
+    - host: sre-incident-agent.internal.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# --- NetworkPolicy ---
+networkPolicy:
+  enabled: true
+  ingress:
+    # Namespace/pod selector allowed to reach the API on service.port, e.g.
+    # the ingress controller namespace, or Alertmanager/PagerDuty relay pods
+    # in-cluster, plus the Prometheus scrape target.
+    fromNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: ingress-nginx
+    fromPodSelector: {}
+    monitoringNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+  egress:
+    prometheusNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    prometheusPort: 9090
+    lokiPort: 3100
+    postgresPort: 5432
+    # K8s API server + all external HTTPS dependencies (Slack, PagerDuty,
+    # Anthropic, OpenAI, AWS Secrets Manager/STS) are reached over 443.
+    httpsPort: 443
+    kubernetesApiCidr: "0.0.0.0/0"
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+
+# --- Application configuration ---
+# Non-secret values land in the ConfigMap (templates/configmap.yaml);
+# secret-bearing values are expected in a pre-existing Secret named
+# `<fullname>` synced by External Secrets Operator / the AWS Secrets
+# Manager CSI driver from infrastructure/terraform/modules/secrets. This
+# chart does not create that Secret directly (it is populated out-of-band),
+# but references its name so the Deployment can envFrom it.
+secretName: ""  # defaults to the chart fullname when empty
+
+config:
+  llmProvider: "anthropic"
+  llmModelFast: "claude-haiku-4-5"
+  llmModelStrong: "claude-sonnet-5"
+  incidentTokenBudget: "120000"
+  logLevel: "INFO"
+  otelServiceName: "sre-incident-agent"
+  otelExporterOtlpEndpoint: "http://otel-collector.monitoring.svc.cluster.local:4318"
+  prometheusMetricsPort: "9464"
+  prometheusBaseUrl: "http://prometheus.monitoring.svc.cluster.local:9090"
+  lokiBaseUrl: "http://loki.monitoring.svc.cluster.local:3100"
+  awsRegion: "us-east-1"
+  awsSecretsManagerPrefix: "sre-incident-agent/prod"
+  apiJwtAudience: "sre-incident-agent"
+  approvalQueueStaleMinutes: "15"
+  allowlistConfigPath: "/app/allowlist.yaml"
+  postgresPoolMin: "1"
+  postgresPoolMax: "10"
+
+# Postgres connection settings surfaced separately for clarity; POSTGRES_DSN
+# itself (including credentials) is expected to arrive via the Secret, not
+# here.
+postgres:
+  host: "sre-incident-agent-prod.xxxxxxxxxxxx.us-east-1.rds.amazonaws.com"
+  port: 5432
+  database: "sre_incident_agent"
